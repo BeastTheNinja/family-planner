@@ -1,6 +1,7 @@
 using FamilyPlanner.Api.Models;
 using FamilyPlanner.Api.Data;
 using FamilyPlanner.Api.DTOs;
+using FamilyPlanner.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyPlanner.Api.Endpoints;
@@ -9,9 +10,9 @@ public static class FamilyTaskEndpoints
 {
     public static void MapFamilyTaskEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/familytasks", async (FamilyPlannerDbContext db) =>
+        app.MapGet("/api/familytasks", async (FamilyTaskService service) =>
         {
-            var tasks = await db.FamilyTasks
+            var tasks = (await service.GetAllAsync())
                 .Select(task => new FamilyTaskResponseDto
                 {
                     Id = task.Id,
@@ -23,7 +24,7 @@ public static class FamilyTaskEndpoints
                 ? task.FamilyMember.Name
                 : null
                 })
-                .ToListAsync();
+                .ToList();
             return Results.Ok(tasks);
         });
 
@@ -37,7 +38,11 @@ public static class FamilyTaskEndpoints
 
             if (existingTask == null)
             {
-                return Results.NotFound();
+                return Results.Problem(
+                    statusCode: 404,
+                    title: "FamilyTask not found",
+                    detail: $"The requested FamilyTask with ID {id} was not found."
+                );
             }
 
 
@@ -62,7 +67,11 @@ public static class FamilyTaskEndpoints
                     .AnyAsync(member => member.Id == newTask.FamilyMemberId);
                 if (!memberExist)
                 {
-                    return Results.BadRequest("FamilyMember does not exist");
+                    return Results.Problem(
+                        statusCode: 400,
+                        title: "Invalid FamilyMemberId",
+                        detail: $"The provided FamilyMemberId {newTask.FamilyMemberId} does not exist."
+                    );
                 }
             }
 
@@ -78,9 +87,24 @@ public static class FamilyTaskEndpoints
 
             await db.SaveChangesAsync();
 
+            var memberName = await db.FamilyMembers
+            .Where(member => member.Id == task.FamilyMemberId)
+            .Select(member => member.Name)
+            .FirstOrDefaultAsync();
+
+            var response = new FamilyTaskResponseDto
+            {
+                Id = task.Id,
+                Title = task.Title,
+                Description = task.Description,
+                IsCompleted = task.IsCompleted,
+                FamilyMemberId = task.FamilyMemberId,
+                FamilyMemberName = memberName
+            };
+
             return Results.Created(
                 $"/api/familytasks/{task.Id}",
-                task
+                response
             );
         });
 
@@ -95,7 +119,11 @@ public static class FamilyTaskEndpoints
             // Return 404 if it doesn't exist
             if (existingTask == null)
             {
-                return Results.NotFound();
+                return Results.Problem(
+                    statusCode: 404,
+                    title: "FamilyTask not found",
+                    detail: $"The requested FamilyTask with ID {id} was not found."
+                );
             }
 
             // Validate FamilyMemberId if provided
@@ -105,7 +133,11 @@ public static class FamilyTaskEndpoints
                     .AnyAsync(member => member.Id == updatedTask.FamilyMemberId);
                 if (!memberExist)
                 {
-                    return Results.BadRequest("FamilyMember does not exist");
+                    return Results.Problem(
+                        statusCode: 400,
+                        title: "Invalid FamilyMemberId",
+                        detail: $"The provided FamilyMemberId {updatedTask.FamilyMemberId} does not exist."
+                    );
                 }
             }
 
@@ -118,8 +150,23 @@ public static class FamilyTaskEndpoints
             // Save changes
             await db.SaveChangesAsync();
 
-            // Return 204 No Content
-            return Results.NoContent();
+            var memberName = await db.FamilyMembers
+            .Where(member => member.Id == existingTask.FamilyMemberId)
+            .Select(member => member.Name)
+            .FirstOrDefaultAsync();
+
+            var response = new FamilyTaskResponseDto
+            {
+                Id = existingTask.Id,
+                Title = existingTask.Title,
+                Description = existingTask.Description,
+                IsCompleted = existingTask.IsCompleted,
+                FamilyMemberId = existingTask.FamilyMemberId,
+                FamilyMemberName = memberName
+            };
+
+            // Return 200 OK with the updated task
+            return Results.Ok(response);
         });
 
         app.MapDelete("/api/familytasks/{id}", async (int id, FamilyPlannerDbContext db) =>
@@ -129,7 +176,11 @@ public static class FamilyTaskEndpoints
             // Return 404 if it doesn't exist
             if (existingTask == null)
             {
-                return Results.NotFound();
+                return Results.Problem(
+                    statusCode: 404,
+                    title: "FamilyTask not found",
+                    detail: $"The requested FamilyTask with ID {id} was not found."
+                );
             }
 
             // Remove the task

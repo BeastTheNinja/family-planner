@@ -1,6 +1,7 @@
 using FamilyPlanner.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using FamilyPlanner.Api.Endpoints;
+using FamilyPlanner.Api.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Register OpenAPI services
 builder.Services.AddOpenApi();
 builder.Services.AddValidation();
+builder.Services.AddProblemDetails();
 
 // Register PostgreSQL database
 builder.Services.AddDbContext<FamilyPlannerDbContext>(options =>
@@ -18,8 +20,10 @@ builder.Services.AddDbContext<FamilyPlannerDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection")
     )
 );
+builder.Services.AddScoped<FamilyTaskService>();
 
 var app = builder.Build();
+app.UseExceptionHandler();
 
 
 
