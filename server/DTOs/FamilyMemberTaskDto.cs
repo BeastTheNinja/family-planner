@@ -1,0 +1,8 @@
+namespace FamilyPlanner.Api.DTOs;
+
+public class FamilyMemberTaskDto
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public bool IsCompleted { get; set; }
+}

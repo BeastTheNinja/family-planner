@@ -12,4 +12,5 @@ public class FamilyPlannerDbContext : DbContext
     }
 
     public DbSet<FamilyMember> FamilyMembers { get; set; } = null!;
+    public DbSet<FamilyTask> FamilyTasks {get; set;} = null!;
 }

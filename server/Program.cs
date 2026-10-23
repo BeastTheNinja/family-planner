@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Register OpenAPI services
 builder.Services.AddOpenApi();
+builder.Services.AddValidation();
 
 // Register PostgreSQL database
 builder.Services.AddDbContext<FamilyPlannerDbContext>(options =>
@@ -31,6 +32,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapFamilyMemberEndpoints();
+app.MapFamilyTaskEndpoints();
 
 app.Run();
 

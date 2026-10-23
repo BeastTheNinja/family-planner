@@ -40,6 +40,48 @@ namespace FamilyPlanner.Api.Migrations
 
                     b.ToTable("FamilyMembers");
                 });
+
+            modelBuilder.Entity("FamilyPlanner.Api.Models.FamilyTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("FamilyMemberId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FamilyMemberId");
+
+                    b.ToTable("FamilyTasks");
+                });
+
+            modelBuilder.Entity("FamilyPlanner.Api.Models.FamilyTask", b =>
+                {
+                    b.HasOne("FamilyPlanner.Api.Models.FamilyMember", "FamilyMember")
+                        .WithMany("Tasks")
+                        .HasForeignKey("FamilyMemberId");
+
+                    b.Navigation("FamilyMember");
+                });
+
+            modelBuilder.Entity("FamilyPlanner.Api.Models.FamilyMember", b =>
+                {
+                    b.Navigation("Tasks");
+                });
 #pragma warning restore 612, 618
         }
     }
