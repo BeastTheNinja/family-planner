@@ -1,8 +1,5 @@
-using FamilyPlanner.Api.Models;
-using FamilyPlanner.Api.Data;
 using FamilyPlanner.Api.DTOs;
 using FamilyPlanner.Api.Services;
-using Microsoft.EntityFrameworkCore;
 
 namespace FamilyPlanner.Api.Endpoints;
 
@@ -28,13 +25,10 @@ public static class FamilyTaskEndpoints
             return Results.Ok(tasks);
         });
 
-        app.MapGet("/api/familytasks/{id}", async (int id, FamilyPlannerDbContext db) =>
+        app.MapGet("/api/familytasks/{id}", async (int id, FamilyTaskService service) =>
         {
 
-            var existingTask = await db.FamilyTasks
-                .Include(task => task.FamilyMember)
-                .FirstOrDefaultAsync(task => task.Id == id);
-
+            var existingTask = await service.GetByIdAsync(id);
 
             if (existingTask == null)
             {
@@ -59,12 +53,15 @@ public static class FamilyTaskEndpoints
             });
         });
 
-        app.MapPost("/api/familytasks", async (FamilyPlannerDbContext db, CreateFamilyTaskDto newTask) =>
+        app.MapPost("/api/familytasks", async (
+            CreateFamilyTaskDto newTask,
+            FamilyTaskService service) =>
         {
             if (newTask.FamilyMemberId.HasValue)
             {
-                bool memberExist = await db.FamilyMembers
-                    .AnyAsync(member => member.Id == newTask.FamilyMemberId);
+                bool memberExist = await service.FamilyMemberExistsAsync(
+                    newTask.FamilyMemberId.Value);
+
                 if (!memberExist)
                 {
                     return Results.Problem(
@@ -75,22 +72,9 @@ public static class FamilyTaskEndpoints
                 }
             }
 
-            var task = new FamilyTask
-            {
-                Title = newTask.Title,
-                Description = newTask.Description,
-                FamilyMemberId = newTask.FamilyMemberId,
-                IsCompleted = false
-            };
+            var task = await service.CreateAsync(newTask);
 
-            db.FamilyTasks.Add(task);
-
-            await db.SaveChangesAsync();
-
-            var memberName = await db.FamilyMembers
-            .Where(member => member.Id == task.FamilyMemberId)
-            .Select(member => member.Name)
-            .FirstOrDefaultAsync();
+            var memberName = await service.GetFamilyMemberNameAsync(task.FamilyMemberId);
 
             var response = new FamilyTaskResponseDto
             {
@@ -110,11 +94,11 @@ public static class FamilyTaskEndpoints
 
         app.MapPut("/api/familytasks/{id}", async (
             int id,
-            FamilyPlannerDbContext db,
-            UpdateFamilyTaskDto updatedTask) =>
+            UpdateFamilyTaskDto updatedTask,
+            FamilyTaskService service) =>
         {
             // Find the existing task
-            var existingTask = await db.FamilyTasks.FindAsync(id);
+            var existingTask = await service.GetByIdAsync(id);
 
             // Return 404 if it doesn't exist
             if (existingTask == null)
@@ -129,8 +113,8 @@ public static class FamilyTaskEndpoints
             // Validate FamilyMemberId if provided
             if (updatedTask.FamilyMemberId.HasValue)
             {
-                bool memberExist = await db.FamilyMembers
-                    .AnyAsync(member => member.Id == updatedTask.FamilyMemberId);
+                bool memberExist = await service.FamilyMemberExistsAsync(
+                    updatedTask.FamilyMemberId.Value);
                 if (!memberExist)
                 {
                     return Results.Problem(
@@ -141,27 +125,17 @@ public static class FamilyTaskEndpoints
                 }
             }
 
-            // Update the task properties
-            existingTask.Title = updatedTask.Title;
-            existingTask.Description = updatedTask.Description;
-            existingTask.IsCompleted = updatedTask.IsCompleted;
-            existingTask.FamilyMemberId = updatedTask.FamilyMemberId;
+            var task = await service.UpdateAsync(existingTask, updatedTask);
 
-            // Save changes
-            await db.SaveChangesAsync();
-
-            var memberName = await db.FamilyMembers
-            .Where(member => member.Id == existingTask.FamilyMemberId)
-            .Select(member => member.Name)
-            .FirstOrDefaultAsync();
+            var memberName = await service.GetFamilyMemberNameAsync(task.FamilyMemberId);
 
             var response = new FamilyTaskResponseDto
             {
-                Id = existingTask.Id,
-                Title = existingTask.Title,
-                Description = existingTask.Description,
-                IsCompleted = existingTask.IsCompleted,
-                FamilyMemberId = existingTask.FamilyMemberId,
+                Id = task.Id,
+                Title = task.Title,
+                Description = task.Description,
+                IsCompleted = task.IsCompleted,
+                FamilyMemberId = task.FamilyMemberId,
                 FamilyMemberName = memberName
             };
 
@@ -169,10 +143,10 @@ public static class FamilyTaskEndpoints
             return Results.Ok(response);
         });
 
-        app.MapDelete("/api/familytasks/{id}", async (int id, FamilyPlannerDbContext db) =>
+        app.MapDelete("/api/familytasks/{id}", async (int id, FamilyTaskService service) =>
         {
             // Find the task
-            var existingTask = await db.FamilyTasks.FindAsync(id);
+            var existingTask = await service.GetByIdAsync(id);
             // Return 404 if it doesn't exist
             if (existingTask == null)
             {
@@ -183,11 +157,7 @@ public static class FamilyTaskEndpoints
                 );
             }
 
-            // Remove the task
-            db.FamilyTasks.Remove(existingTask);
-
-            // Save changes
-            await db.SaveChangesAsync();
+            await service.DeleteAsync(existingTask);
 
             // Return 204 No Content
             return Results.NoContent();

@@ -5,6 +5,15 @@ using FamilyPlanner.Api.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ReactFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -21,10 +30,11 @@ builder.Services.AddDbContext<FamilyPlannerDbContext>(options =>
     )
 );
 builder.Services.AddScoped<FamilyTaskService>();
+builder.Services.AddScoped<FamilyMemberService>();
 
 var app = builder.Build();
 app.UseExceptionHandler();
-
+app.UseCors("ReactFrontend");
 
 
 // Configure the HTTP request pipeline.

@@ -1,7 +1,6 @@
-using FamilyPlanner.Api.Models;
-using FamilyPlanner.Api.Data;
 using FamilyPlanner.Api.DTOs;
-using Microsoft.EntityFrameworkCore;
+using FamilyPlanner.Api.Services;
+
 
 namespace FamilyPlanner.Api.Endpoints;
 
@@ -10,46 +9,42 @@ public static class FamilyMemberEndpoints
     public static void MapFamilyMemberEndpoints(this WebApplication app)
     {
 
-        app.MapGet("/api/familymembers", async (FamilyPlannerDbContext db) =>
+        app.MapGet("/api/familymembers", async (FamilyMemberService service) =>
         {
-            var members = await db.FamilyMembers
-                .Select(member => new FamilyMemberResponseDto
-
+            var members = await service.GetAllAsync();
+            var response = members.Select(member => new FamilyMemberResponseDto
+            {
+                Id = member.Id,
+                Name = member.Name,
+                IsActive = member.IsActive,
+                Tasks = member.Tasks.Select(task => new FamilyMemberTaskDto
                 {
-                    Id = member.Id,
-                    Name = member.Name,
-                    IsActive = member.IsActive,
-                    Tasks = member.Tasks.Select(task => new FamilyMemberTaskDto
-                    {
-                        Id = task.Id,
-                        Title = task.Title,
-                        IsCompleted = task.IsCompleted
-                    }).ToList()
-                })
-                .ToListAsync();
-            return Results.Ok(members);
+                    Id = task.Id,
+                    Title = task.Title,
+                    IsCompleted = task.IsCompleted
+                }).ToList()
+            }).ToList();
+            return Results.Ok(response);
         });
 
-        app.MapGet("/api/familymembers/{id}", async (FamilyPlannerDbContext db, int id) =>
+        app.MapGet("/api/familymembers/{id}", async (FamilyMemberService service, int id) =>
         {
-            var familyMember = await db.FamilyMembers
-                .Where(member => member.Id == id)
-                 .Select(member => new FamilyMemberResponseDto
+            var member = await service.GetByIdAsync(id);
 
-                 {
-                     Id = member.Id,
-                     Name = member.Name,
-                     IsActive = member.IsActive,
-                     Tasks = member.Tasks.Select(task => new FamilyMemberTaskDto
-                     {
-                         Id = task.Id,
-                         Title = task.Title,
-                         IsCompleted = task.IsCompleted
-                     }).ToList()
-                 })
-                .FirstOrDefaultAsync();
+            var response = member != null ? new FamilyMemberResponseDto
+            {
+                Id = member.Id,
+                Name = member.Name,
+                IsActive = member.IsActive,
+                Tasks = member.Tasks.Select(task => new FamilyMemberTaskDto
+                {
+                    Id = task.Id,
+                    Title = task.Title,
+                    IsCompleted = task.IsCompleted
+                }).ToList()
+            } : null;
 
-            if (familyMember == null)
+            if (response == null)
             {
                 return Results.Problem(
                     statusCode: 404,
@@ -57,26 +52,19 @@ public static class FamilyMemberEndpoints
                     detail: $"The requested FamilyMember with ID {id} was not found."
                 );
             }
-            return Results.Ok(familyMember);
+            return Results.Ok(response);
         });
 
-        app.MapPost("/api/familymembers", async (FamilyPlannerDbContext db, CreateFamilyMemberDto newMember) =>
+        app.MapPost("/api/familymembers", async (FamilyMemberService service, CreateFamilyMemberDto newMember) =>
         {
-            var member = new FamilyMember
-            {
-                Name = newMember.Name,
-                IsActive = newMember.IsActive
-            };
-
-            db.FamilyMembers.Add(member);
-
-            await db.SaveChangesAsync();
+            var member = await service.CreateAsync(newMember);
 
             var response = new FamilyMemberResponseDto
             {
                 Id = member.Id,
                 Name = member.Name,
                 IsActive = member.IsActive,
+                Tasks = new List<FamilyMemberTaskDto>()
             };
 
             return Results.Created(
@@ -85,9 +73,9 @@ public static class FamilyMemberEndpoints
             );
         });
 
-        app.MapPut("/api/familymembers/{id}", async (FamilyPlannerDbContext db, int id, UpdateFamilyMemberDto updatedFamilyMember) =>
+        app.MapPut("/api/familymembers/{id}", async (FamilyMemberService service, int id, UpdateFamilyMemberDto updatedFamilyMember) =>
         {
-            var existingFamilyMember = await db.FamilyMembers.FindAsync(id);
+            var existingFamilyMember = await service.GetByIdAsync(id);
             if (existingFamilyMember == null)
             {
                 return Results.Problem(
@@ -97,43 +85,27 @@ public static class FamilyMemberEndpoints
                 );
             }
 
-            existingFamilyMember.Name = updatedFamilyMember.Name;
-            existingFamilyMember.IsActive = updatedFamilyMember.IsActive;
+            await service.UpdateAsync(existingFamilyMember, updatedFamilyMember);
 
-            await db.SaveChangesAsync();
-
-            var familyMember = await db.FamilyMembers
-                .Where(member => member.Id == id)
-                 .Select(member => new FamilyMemberResponseDto
-
-                 {
-                     Id = member.Id,
-                     Name = member.Name,
-                     IsActive = member.IsActive,
-                     Tasks = member.Tasks.Select(task => new FamilyMemberTaskDto
-                     {
-                         Id = task.Id,
-                         Title = task.Title,
-                         IsCompleted = task.IsCompleted
-                     }).ToList()
-                 })
-                .FirstOrDefaultAsync();
-
-            if (familyMember == null)
+            var response = new FamilyMemberResponseDto
             {
-                return Results.Problem(
-                    statusCode: 404,
-                    title: "FamilyMember not found",
-                    detail: $"The requested FamilyMember with ID {id} was not found."
-                );
-            }
+                Id = existingFamilyMember.Id,
+                Name = existingFamilyMember.Name,
+                IsActive = existingFamilyMember.IsActive,
+                Tasks = existingFamilyMember.Tasks.Select(task => new FamilyMemberTaskDto
+                {
+                    Id = task.Id,
+                    Title = task.Title,
+                    IsCompleted = task.IsCompleted
+                }).ToList()
+            };
 
-            return Results.Ok(familyMember);
+            return Results.Ok(response);
         });
 
-        app.MapDelete("/api/familymembers/{id}", async (FamilyPlannerDbContext db, int id) =>
+        app.MapDelete("/api/familymembers/{id}", async (FamilyMemberService service, int id) =>
         {
-            var deleteFamilyMember = await db.FamilyMembers.FindAsync(id);
+            var deleteFamilyMember = await service.GetByIdAsync(id);
             if (deleteFamilyMember == null)
             {
                 return Results.Problem(
@@ -142,10 +114,16 @@ public static class FamilyMemberEndpoints
                     detail: $"The requested FamilyMember with ID {id} was not found."
                 );
             }
+            if (deleteFamilyMember.Tasks.Any())
+            {
+                return Results.Problem(
+                    statusCode: 409,
+                    title: "Cannot delete FamilyMember with associated tasks",
+                    detail: $"The requested FamilyMember with ID {id} has associated tasks and cannot be deleted."
+                );
+            }
 
-            db.FamilyMembers.Remove(deleteFamilyMember);
-
-            await db.SaveChangesAsync();
+            await service.DeleteAsync(deleteFamilyMember);
 
             return Results.NoContent();
 
